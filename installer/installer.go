@@ -16,86 +16,97 @@ import (
 )
 
 const (
-	gitHubRepoURL = "https://api.github.com/repos/ethan-davies/mock-binarys"
+    gitHubRepoURL = "https://api.github.com/repos/ethan-davies/mock-binarys"
 )
 
 func getInstallDir() string {
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "MockShell")
-	case "darwin":
-		return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "MockShell")
-	default: // Default to Linux-like systems
-		return filepath.Join(os.Getenv("HOME"), ".mockshell")
-	}
+    switch runtime.GOOS {
+    case "windows":
+        return filepath.Join(os.Getenv("APPDATA"), "MockShell")
+    case "darwin":
+        return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "MockShell")
+    default: // Default to Linux-like systems
+        return filepath.Join(os.Getenv("HOME"), ".mockshell")
+    }
 }
 
 func getBinaryFileName() string {
-	if runtime.GOOS == "windows" {
-		return "mock.exe"
-	}
-	return "mock"
+    if runtime.GOOS == "windows" {
+        return "mock.exe"
+    }
+    return "mock"
 }
 
 func downloadFile(url, targetPath string) error {
-	fmt.Printf("Downloading file from: %s\n", url)
+    fmt.Printf("Downloading file from: %s\n", url)
 
-	response, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
+    response, err := http.Get(url)
+    if err != nil {
+        return err
+    }
+    defer response.Body.Close()
 
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status: %s", response.Status)
-	}
+    if response.StatusCode != http.StatusOK {
+        return fmt.Errorf("download failed with status: %s", response.Status)
+    }
 
-	out, err := os.Create(targetPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
+    out, err := os.Create(targetPath)
+    if err != nil {
+        return err
+    }
+    defer out.Close()
 
-	_, err = io.Copy(out, response.Body)
-	if err != nil {
-		return err
-	}
+    _, err = io.Copy(out, response.Body)
+    if err != nil {
+        return err
+    }
 
-	return nil
+    return nil
 }
 
-
-
 func addToPath(path string) error {
-	pathVar := os.Getenv("PATH")
-	if !strings.Contains(pathVar, path) {
-		pathVar = path + string(os.PathListSeparator) + pathVar
-		err := os.Setenv("PATH", pathVar)
-		if err != nil {
-			return err
-		}
+    pathVar := os.Getenv("PATH")
+    if !strings.Contains(pathVar, path) {
+        pathVar = path + string(os.PathListSeparator) + pathVar
+        err := os.Setenv("PATH", pathVar)
+        if err != nil {
+            return err
+        }
 
-		// Add to PATH using system-specific command
-		switch runtime.GOOS {
-		case "windows":
-			cmd := exec.Command("setx", "PATH", pathVar)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			return cmd.Run()
-		case "linux", "darwin":
-			cmd := exec.Command("sh", "-c", fmt.Sprintf(`echo 'export PATH="%s:$PATH"' >> ~/.bashrc`, path))
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			return cmd.Run()
-		}
-	}
+        // Append to user's shell configuration file
+        switch runtime.GOOS {
+        case "windows":
+            cmd := exec.Command("setx", "PATH", pathVar)
+            cmd.Stdout = os.Stdout
+            cmd.Stderr = os.Stderr
+            return cmd.Run()
+        case "linux", "darwin":
+            shellConfigFile := filepath.Join(os.Getenv("HOME"), ".bashrc")
+            if runtime.GOOS == "darwin" {
+                shellConfigFile = filepath.Join(os.Getenv("HOME"), ".bash_profile")
+            }
 
-	return nil
+            // Check if the path is already in the shell config
+            grepCmd := exec.Command("grep", "-q", fmt.Sprintf(`export PATH="%s:$PATH"`, path), shellConfigFile)
+            grepCmd.Stdout = os.Stdout
+            grepCmd.Stderr = os.Stderr
+
+            if err := grepCmd.Run(); err != nil {
+                // Append to the shell config if not found
+                cmd := exec.Command("sh", "-c", fmt.Sprintf(`echo 'export PATH="%s:$PATH"' >> %s`, path, shellConfigFile))
+                cmd.Stdout = os.Stdout
+                cmd.Stderr = os.Stderr
+                return cmd.Run()
+            }
+        }
+    }
+
+    return nil
 }
 
 func waitForKeyPress() {
-	fmt.Println("Press Enter to continue...")
-	fmt.Scanln() // Wait for Enter key
+    fmt.Println("Press Enter to continue...")
+    fmt.Scanln() // Wait for Enter key
 }
 
 func fetchLatestVersion() (*version.Version, error) {
@@ -129,77 +140,75 @@ func fetchLatestVersion() (*version.Version, error) {
     return version.NewVersion(releaseData.TagName)
 }
 
-
-
 func main() {
-	fmt.Println("Installing Mock Shell...")
+    fmt.Println("Installing Mock Shell...")
 
-	installDir := getInstallDir()
-	binDir := filepath.Join(installDir, "bin")
-	binaryFileName := getBinaryFileName()
-	binaryPath := filepath.Join(binDir, binaryFileName)
+    installDir := getInstallDir()
+    binDir := filepath.Join(installDir, "bin")
+    binaryFileName := getBinaryFileName()
+    binaryPath := filepath.Join(binDir, binaryFileName)
 
-	latestVersion, err := fetchLatestVersion()
-	if err != nil {
-		fmt.Println("Error fetching latest version:", err)
-		waitForKeyPress()
-		return
-	}
+    latestVersion, err := fetchLatestVersion()
+    if err != nil {
+        fmt.Println("Error fetching latest version:", err)
+        waitForKeyPress()
+        return
+    }
 
-	fmt.Println("Latest version:", latestVersion)
+    fmt.Println("Latest version:", latestVersion)
 
-	// Determine the platform-specific URL for the binary
-	var platformURL string
-	switch runtime.GOOS {
-	case "windows":
-		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-windows.exe", latestVersion)
-	case "linux":
-		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-linux", latestVersion)
-	case "darwin":
-		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-macos", latestVersion)
-	default:
-		fmt.Println("Unsupported platform:", runtime.GOOS)
-		waitForKeyPress()
-		return
-	}
+    // Determine the platform-specific URL for the binary
+    var platformURL string
+    switch runtime.GOOS {
+    case "windows":
+        platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-windows.exe", latestVersion)
+    case "linux":
+        platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-linux", latestVersion)
+    case "darwin":
+        platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-macos", latestVersion)
+    default:
+        fmt.Println("Unsupported platform:", runtime.GOOS)
+        waitForKeyPress()
+        return
+    }
 
-	// Create the installation directory if it doesn't exist
-	err = os.MkdirAll(binDir, 0755)
-	if err != nil {
-		fmt.Println("Error creating installation directory:", err)
-		waitForKeyPress()
-		return
-	}
+    // Create the installation directory if it doesn't exist
+    err = os.MkdirAll(binDir, 0755)
+    if err != nil {
+        fmt.Println("Error creating installation directory:", err)
+        waitForKeyPress()
+        return
+    }
 
-	// Download the binary
-	fmt.Println("Downloading Mock Shell binary...")
-	err = downloadFile(platformURL, binaryPath)
-	if err != nil {
-		fmt.Println("Error downloading binary:", err)
-		waitForKeyPress()
-		return
-	}
+    // Download the binary
+    fmt.Println("Downloading Mock Shell binary...")
+    err = downloadFile(platformURL, binaryPath)
+    if err != nil {
+        fmt.Println("Error downloading binary:", err)
+        waitForKeyPress()
+        return
+    }
 
-	// Make the binary executable
-	fmt.Println("Setting file permissions...")
-	err = os.Chmod(binaryPath, 0755)
-	if err != nil {
-		fmt.Println("Error setting file permissions:", err)
-		waitForKeyPress()
-		return
-	}
+    // Make the binary executable
+    fmt.Println("Setting file permissions...")
+    err = os.Chmod(binaryPath, 0755)
+    if err != nil {
+        fmt.Println("Error setting file permissions:", err)
+        waitForKeyPress()
+        return
+    }
 
-	// Add the installation directory to the system's PATH
-	fmt.Println("Adding to system PATH...")
-	err = addToPath(binDir)
-	if err != nil {
-		fmt.Println("Error adding to PATH:", err)
-		waitForKeyPress()
-		return
-	}
+    // Add the installation directory to the system's PATH
+    fmt.Println("Adding to system PATH...")
+    err = addToPath(binDir)
+    if err != nil {
+        fmt.Println("Error adding to PATH:", err)
+        waitForKeyPress()
+        return
+    }
 
-	// Print success message
-	fmt.Printf("Mock Shell has been successfully installed to %s.\n", installDir)
-	fmt.Println("Please open a new command prompt or terminal window to use Mock Shell.")
-	waitForKeyPress()
+    // Print success message
+    fmt.Printf("Mock Shell has been successfully installed to %s.\n", installDir)
+    fmt.Println("Please open a new command prompt or terminal window to use Mock Shell.")
+    waitForKeyPress()
 }
