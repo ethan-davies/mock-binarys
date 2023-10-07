@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	gitHubRepoURL = "https://api.github.com/repos/ethan-davies/mock"
+	gitHubRepoURL = "https://api.github.com/repos/ethan-davies/mock-binarys"
 )
 
 func getInstallDir() string {
@@ -152,11 +152,11 @@ func main() {
 	var platformURL string
 	switch runtime.GOOS {
 	case "windows":
-		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock/releases/download/v%s/mock-windows.exe", latestVersion)
+		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-windows.exe", latestVersion)
 	case "linux":
-		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock/releases/download/v%s/mock-linux", latestVersion)
+		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-linux", latestVersion)
 	case "darwin":
-		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock/releases/download/v%s/mock-macos", latestVersion)
+		platformURL = fmt.Sprintf("https://github.com/ethan-davies/mock-binarys/releases/download/v%s/mock-macos", latestVersion)
 	default:
 		fmt.Println("Unsupported platform:", runtime.GOOS)
 		waitForKeyPress()
